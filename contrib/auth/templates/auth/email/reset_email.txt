@@ -1,0 +1,9 @@
+Hi <?=$user->name;?>,
+
+A request has been made to reset your password on <?= $site_name ?>. To complete the process for your account, use the link below:
+
+<?= $reset_link ?>
+
+If clicking the link above does not work, copy and paste the URL in a new browser window instead.
+
+Thank you for using <?= $site_name ?>.
