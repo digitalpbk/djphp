@@ -1,0 +1,19 @@
+DJPHP
+=====
+
+Alpha version of Django like framework written in PHP
+
+Tested in 
+PHP 5.2 
+PHP 5.3
+
+Notable Features
+================
+A Primitive ORM similar to django
+Applicationwise structure of organization
+Form API, ModelForms 
+URLs and resolving feature
+
+
+
+
