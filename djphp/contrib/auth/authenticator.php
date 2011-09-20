@@ -40,5 +40,21 @@ class DefaultAuthBackend {
         }
         return $cache[$user->id . $perm];
     }
+
+    function grant_access($user, $perm, $perm_code) {
+        $perm = new UserPermissionMap();
+        $perm->user = $user;
+        $perm->perm_id = $perm_code;
+        try{
+            return $perm->save();
+        }
+        catch(QuerySetDuplicateException $e) {
+            return TRUE;
+        }
+    }
+
+    function revoke_access($user, $perm, $perm_code) {
+        return UserPermissionMap::$objects->filter('user_id','=',$user->id)->filter('perm_id','=',$perm_code)->delete();
+    }
 }
 

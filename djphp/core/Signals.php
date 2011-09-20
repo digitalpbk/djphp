@@ -9,7 +9,10 @@ class Signals {
         }
         return self::$_instance;
     }
-    
+
+    /*
+     * Connect to signal,function name,sender
+     */
     public function connect($type,$func_name,$sender=NULL,$unique_name = NULL){
 		if(!isset($this->_listeners[$type])){
             $this->_listeners[$type] = array();
@@ -22,9 +25,10 @@ class Signals {
 
     }
     
-    public function fire($type, Argument $kwargs, $sender){
+    public function fire($type, Argument $kwargs, $sender = NULL){
         $return = array();
         if(isset($this->_listeners[$type])){
+            $kwargs->__signal__ = $type;
             foreach($this->_listeners[$type] as $listener){
                 list($func,$sender_this) = $listener;
 				if($sender_this === NULL || $sender === $sender_this) {

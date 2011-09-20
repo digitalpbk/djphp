@@ -43,7 +43,7 @@ class HttpRequest{
 		$this->path = rtrim(!empty($this->QUERY_STRING)?str_replace("?".$this->QUERY_STRING,"",$this->uri):$this->uri,"?");
 
         $this->HEADERS = apache_request_headers();
-        $this->REMOTE_IP = $_SERVER['REMOTE_ADDR'];
+        $this->REMOTE_IP = $this->_ip_address();
         $this->__lazy = array();
 	}
 
@@ -62,8 +62,9 @@ class HttpRequest{
         if(isset($this->__cache[$name])){
             return $this->__cache[$name];
         }
+
         if(isset($this->__lazy[$name])){
-            list($callback,$params) = $this->__lazy;
+            list($callback,$params) = $this->__lazy[$name];
             $o = call_user_func_array($callback,$params);
             $this->__cache[$name] = $o;
             return $o;
@@ -79,20 +80,69 @@ class HttpRequest{
         
         return NULL;
     }
+
+    function support_gzip() {
+        if(isset($this->HEADERS['Accept-Encoding'])){
+            return (strpos($this->HEADERS['Accept-Encoding'],'gzip') !== FALSE);
+        }
+        return FALSE;
+    }
+
+    private function _ip_address() {
+		if ($this->REMOTE_IP)
+		{
+			return $this->REMOTE_IP;
+		}
+
+        $REMOTE_IP = FALSE;
+
+		if (App::$settings->PROXY_IP_LIST  && $_SERVER['HTTP_X_FORWARDED_FOR'] && $_SERVER['REMOTE_ADDR'])
+		{
+			$proxies = is_array(App::$settings->PROXY_IP_LIST) ? App::$settings->PROXY_IP_LIST : array(App::$settings->PROXY_IP_LIST);
+			$REMOTE_IP = in_array($_SERVER['REMOTE_ADDR'], $proxies) ? $_SERVER['HTTP_X_FORWARDED_FOR'] : $_SERVER['REMOTE_ADDR'];
+		}
+		else if (isset($_SERVER['HTTP_CLIENT_IP']))
+		{
+			$REMOTE_IP = $_SERVER['HTTP_CLIENT_IP'];
+		}
+		else if (isset($_SERVER['HTTP_X_FORWARDED_FOR']))
+		{
+			$REMOTE_IP = $_SERVER['HTTP_X_FORWARDED_FOR'];
+		}
+        else if (isset($_SERVER['REMOTE_ADDR']))
+		{
+			$REMOTE_IP = $_SERVER['REMOTE_ADDR'];
+		}
+
+		if ($REMOTE_IP === FALSE)
+		{
+			return '0.0.0.0';
+		}
+
+		if (strstr($REMOTE_IP, ','))
+		{
+			$x = explode(',', $REMOTE_IP);
+			$REMOTE_IP = trim(end($x));
+		}
+
+		return $REMOTE_IP;
+    }
 }
 
 class HttpResponse{
-	public $mimetype;
-    public $eTag;
 	public $status;
 	public $content;
-    public $last_modified;
-	
+	public $headers = array();
+
 	function __construct($content,$status = NULL,$mimetype = NULL){
 		$this->status = $status? $status: 200;
 		$this->content = $content;
-		$this->mimetype = $mimetype?$mimetype:"text/html";
+		$this->set_header('Content-Type', $mimetype?$mimetype:"text/html");
 	}
+
+    public function set_header($key,$value) {
+        $this->headers[$key] = $value;
+    }
 }
 
 
@@ -111,5 +161,12 @@ class Http404 extends HttpException{
     function __construct($message=NULL) {
         if(!$message) $message = "Page Not Found";
 		parent::__construct(404,NULL,$message);
+    }
+}
+
+class Http403 extends HttpException{
+    function __construct($message=NULL) {
+        if(!$message) $message = "Access Denied";
+		parent::__construct(403,NULL,$message);
     }
 }

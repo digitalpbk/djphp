@@ -42,7 +42,8 @@ class MysqliResult {
 			if($mapping) {
 				$res = array();
 				foreach($obj as $var => $value) {
-					list($alias,$field) = explode('__',$var);
+					list($alias,$field) = explode('__',$var,2);
+                    //if(!$field) echo $var;
 					$klass = $mapping[$alias];
 					if(!isset($res[$klass]))
 						$res[$klass] = new StdClass;
@@ -131,7 +132,7 @@ class MysqliBackend extends mysqli{
 		else {
 			$sql = $param;
 		}
-		
+		//echo $sql;
 		$this->connect();
 		
 		if(!$sql){ 
@@ -152,6 +153,7 @@ class MysqliBackend extends mysqli{
 		$sql = $renderer->render();
 		$args = $renderer->args;
         //var_dump($sql,$args);
+
 		$result = $this->prepared_query($sql, $args, !$will_free);
 		$result->renderer = $renderer;
 		return $result;
@@ -159,6 +161,14 @@ class MysqliBackend extends mysqli{
 	
 	function query($param, $will_free = TRUE, $prefer_prepared = TRUE){
 		if($param instanceof QuerySet) {
+
+            foreach($param->fields as $field) {
+                if($field instanceof BlobField) {
+                    $prefer_prepared = FALSE;
+                    break;
+                }
+            }
+            
 			if($prefer_prepared){
 				return $this->query_prepared($param, $will_free);
 			}
@@ -166,7 +176,7 @@ class MysqliBackend extends mysqli{
 		return $this->query_unprepared($param, $will_free);
 	}
 	
-	function raw_query($sql, $args, $store = FALSE) {
+	function raw_query($sql, $args = NULL, $store = FALSE) {
 		return $this->prepared_query($sql, $args, $store);
 	}
 	
@@ -179,8 +189,6 @@ class MysqliBackend extends mysqli{
 				throw new DBException($stmt->error.' '.$sql, $stmt->errno);
 			}
 			if($args) {
-				
-				
 				$datatypes = '';
 				$values = array();
 				
@@ -284,8 +292,10 @@ class SQLRender {
 
         
 		foreach($this->tables as $key => &$table){
-			$table = getStaticProperty($table, 'table');
+			$manager = getStaticProperty($table, 'objects');
+			$table = $manager->table;
 		}
+		
 		if(count($this->tables) > 1){
 			$this->multitabled = TRUE;
 			$i = 1;
@@ -316,17 +326,39 @@ class SQLRender {
             if($this->multitabled) {
                 $table = $this->table_aliases[$this->tables[$field->klass]];
                 $col = "`$table`.`$field->field`";
-                if($aliased)
-                    return $col . ' AS ' . $table . '__' . $field->field;
-                else
-                    return $table . '.' . $field->field;
             }
             else
-                return '`'.$field->field.'`';
+                $col = '`'.$field->field.'`';
+
+            $alias = $field->field;
+            
+            if(isset($field->sub_part)) {
+                switch($field->sub_part) {
+                    case 'date': $col = 'DATE('.$col.')';break;
+                    default:
+                        throw new DBException("Unsupported sub part $field->sub_part");
+                }
+                $alias = $field->field .'__' . $field->sub_part;
+            }
         }
         else if($field instanceof Aggregator) {
-            return strtoupper($field->type).'('.$this->render_field($field->field).') AS ' . $field->alias;
+            $col =  strtoupper($field->type).'('.$this->render_field($field->field).')';
+            $alias = $field->alias;
+
+            if($this->multitabled)
+                $table = $this->table_aliases[$this->tables[$field->field->klass]];
         }
+
+        if($aliased) {
+            if($this->multitabled) {
+                $col = $col . ' AS ' . $table . '__' . $alias;
+            }
+            else if($alias != $field->field) {
+                $col = $col . ' AS ' . $alias;
+            }
+        }
+
+        return $col;
 	}
     
     function render_fields(){
@@ -431,7 +463,7 @@ class SQLRender {
                 $query .= ' ('.$this->render_Q($filter->child).') ';
             }
         }
-        return $query;
+        return trim($query);
     }
     
     function render_order(){
@@ -479,13 +511,13 @@ class SQLRender {
                 $query .= ' WHERE '.$filter;
             
 			if($this->qs->operation == 'SELECT' || $this->qs->operation == 'SELECT DISTINCT') {
-				$order = $this->render_order();
-				if($order)
-					$query .= ' ORDER BY '.$order;
-
                 $group = $this->render_group();
                 if($group)
 					$query .= ' GROUP BY '.$group;
+
+                $order = $this->render_order();
+                if($order)
+                    $query .= ' ORDER BY '.$order;
 
 				if($this->qs->limit)
 					$query .= ' LIMIT '.join(',',$this->qs->limit);
@@ -505,7 +537,10 @@ class SQLRender {
             $filter = $this->render_filters();
             if($filter)
                 $query .= ' WHERE '.$filter;
-            
+
+            $order = $this->render_order();
+            if($order)
+                $query .= ' ORDER BY '.$order;
 
 			if($this->qs->limit)
 				$query .= ' LIMIT '.$this->qs->limit[1];

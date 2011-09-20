@@ -124,6 +124,26 @@ class ChoiceFormField extends FormField {
     }
 }
 
+class MultiChoiceFormField extends FormField {
+	public $choices;
+
+	public function __construct(Argument $args) {
+		$this->widget = $args->get('widget',new MultiSelectWidget());
+		$this->choices = $this->widget->choices = $args->get_required('choices');
+		parent::__construct($args);
+	}
+
+    public function validate(){
+        parent::validate();
+        if(!$this->value){
+            $this->value = array();
+        }
+        
+        if(array_diff($this->value,array_keys($this->choices))){
+            throw new ValidationError("Value not in choices",'INVALID_CHOICE');
+        }
+    }
+}
 
 class EmailFormField extends CharFormField {
     function validate(){

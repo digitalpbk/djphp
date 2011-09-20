@@ -1,0 +1,8 @@
+<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+<? foreach($sitemaps as $sitemap):?>
+<sitemap>
+    <loc>http://<?=$SITE_NAME?>/sitemap/<?=$sitemap->name;?>.xml.gz</loc>
+    <lastmod><? $date=$sitemap->lastmod_index(); echo $date->format('Y-m-d');?></lastmod>
+</sitemap>
+<? endforeach;?>
+</sitemapindex>

@@ -4,10 +4,14 @@ import("cachebase");
 class MemCacheBackend extends BaseCache {
     static $handle = NULL;
 
-    static function get($key) {
+    static function get($key,$raw=FALSE) {
         $key = parent::prefixed_key($key);
         if($handle = self::get_handle()) {
-            return parent::decode($handle->get ( $key ));
+            $value = $handle->get ( $key );
+            if(!$raw)
+                return parent::decode($value);
+            else
+                return $value;
         }
         return NULL;
     }

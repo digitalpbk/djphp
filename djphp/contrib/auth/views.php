@@ -52,7 +52,9 @@ class AuthController {
 			$next = App::$settings->LOGOUT_REDIRECT;
 		}
 		
-		return redirect($next);
+		$response = redirect($next);
+        $response->set_header("Cache-Control","no-cache");
+        return $response;
 	}
 
     static function register(HttpRequest $request,Argument $args) {
@@ -110,6 +112,7 @@ class AuthController {
 				$user->set_password($password);
 				//$user->last_logged_in = new DateTime();
 				$user->save();
+							
 				
 				return redirect(UrlResolver::reverse('auth_login'));
 			}

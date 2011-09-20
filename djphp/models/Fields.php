@@ -192,7 +192,10 @@ class EnumField extends StringField {
     }
 
     function before_save($value, &$instance,$create = FALSE) {
-        if(!in_array($value,array_keys($this->choices))){
+        if(!$value && !$this->null) {
+            throw new Exception("Invalid ENUM choice");
+        }
+        if($value && !in_array($value,array_keys($this->choices))){
             throw new Exception("Invalid ENUM choice");
         }
         return parent::before_save($value,$instance,$create);

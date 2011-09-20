@@ -27,31 +27,150 @@ function Q($field,$cmp,$value,$op="AND",$child=NULL){
 class QuerySetException extends Exception {}
 class QuerySetDuplicateException extends QuerySetException {}
 
-class QuerySet implements ArrayAccess, Iterator, Countable  {
+class BaseQuerySet implements ArrayAccess, Iterator, Countable {
     public $limit;
     public $order_by;
     public $filters;
     public $fields;
+    public $operation = 'SELECT';
+    
+    protected $_qCache = array();
+    protected $_qPtr = 0;
+    protected $_qMinCount = NULL;
+    protected $_reloading = FALSE;
+    protected $_only = FALSE;
+
+    function __construct() {
+        $this->filters =
+        $this->order_by =
+        $this->fields = 
+        $this->limit = array();
+    }
+
+    /*Implementation of interfaces*/
+    public function offsetSet($offset,$value) {
+        throw new Exception("Cannot set to QuerySet");
+    }
+
+    public function offsetExists($offset) {
+        $obj = $this->offsetGet($offset);
+        return $obj !== NULL;
+    }
+
+    public function offsetUnset($offset) {
+        throw new Exception("Cannot unset in QuerySet");
+    }
+
+    public function offsetGet($offset) {
+        if($this->_qMinCount !== NULL && $offset >= $this->_qMinCount)
+            return NULL;
+
+        if(isset($this->_qCache[$offset])){
+            return $this->_qCache[$offset];
+        }
+
+        $this->load($offset);
+        if(isset($this->_qCache[$offset])){
+            return $this->_qCache[$offset];
+        }
+
+        $this->setMinCount($offset);
+        return NULL;
+    }
+
+    public function rewind() {
+        $this->_qPtr = 0;
+    }
+
+    public function current() {
+        if(isset($this->_qCache[$this->_qPtr])){
+            return $this->_qCache[$this->_qPtr];
+        }
+    }
+
+    public function key() {
+        return $this->_qPtr;
+    }
+
+    public function next() {
+        ++$this->_qPtr;
+    }
+
+    public function valid() {
+        return ($this->offsetGet($this->_qPtr) !== NULL);
+    }
+    /* end */
+
+    function setMinCount($count){
+        if($this->_qMinCount === NULL){
+            $this->_qMinCount = $count;
+        }
+
+        if($count < $this->_qMinCount){
+            $this->_qMinCount = $count;
+        }
+    }
+
+    function load($start=0,$limit=100){
+        if(empty($this->limit) || $this->_reloading){
+            $this->limit = array($start,$limit);
+            $this->_reloading = TRUE;
+        }
+
+        $this->_qCache = array(); //reset to avoid memory leaks
+        $i = $this->fill_cache($start);
+        if($i < ($this->limit[0] + $this->limit[1]))
+            $this->setMinCount($i);
+
+        return $this->_qCache;
+    }
+
+    function limit($start,$count=NULL) {
+        if($count){
+            $count = intval($count);
+        }
+        $start = intval($start);
+
+        if($start || $count) {
+            if($count){
+                $this->limit = array($start,$count);
+                $this->_qMinCount = $start+$count;
+            }
+            else {
+                $this->limit = array(0,$start);
+                $this->_qMinCount = $start;
+            }
+        }
+        else {
+            throw new Exception("Limits are not valid");
+        }
+        return $this;
+    }
+
+    function copy(){
+        return clone $this;
+    }
+
+    function delete() {
+        $this->operation = 'DELETE';
+    }
+
+    function count(){}
+}
+
+class QuerySet extends BaseQuerySet  {
 	public $manager;
 	public $foreign_keys;
-    public $operation = 'SELECT';
     public $values = array();
 	public $group_by;
-    
-    private $_qCache = array();
-    private $_qPtr = 0;
-    private $_qMinCount = NULL;
-    private $_only = FALSE;
+
     private $_castable = TRUE;
-    
-    private $last_op;
-    
+
+
     function __construct(&$manager){
 		$this->manager = &$manager;
-        $this->filters = 
-        $this->order_by =
-        $this->group_by =
-        $this->limit = array();
+        parent::__construct();
+        $this->group_by = array();
 		$this->values = array();
         $this->fields = $manager->fields;
 		$this->using = 0;
@@ -137,50 +256,62 @@ class QuerySet implements ArrayAccess, Iterator, Countable  {
             $other = array_shift($parts);
 			$rest = join('__', $parts);
 
-			if(!isset($manager->foreign_keys[$field])){
-				throw new QuerySetException("Unknown foreign key map $field");
-			}
-			
-			$fk = $manager->foreign_keys[$field];
-			
-			$klass = $fk->to_klass;
-			$other_manager = getStaticProperty($klass,'objects');
 
-            $to_field = $other_manager->fields[$fk->to_field()];
-            $field = $manager->fields[$fk->from_field];
+			if(isset($manager->foreign_keys[$field])){
+                $fk = $manager->foreign_keys[$field];
 
-            if(!isset($this->foreign_keys[$klass])) {
-                $this->foreign_keys[$klass] = $fk->field;
-                $this->filters[] = Q($field,'=',$to_field);
-            }
-            
-			if(!isset($other_manager->fields[$other])){
-                if($rest){
-                    return $this->_resolve_field($other.'__'.$rest,$other_manager);
+                $klass = $fk->to_klass;
+                $other_manager = getStaticProperty($klass,'objects');
+
+                $to_field = $other_manager->fields[$fk->to_field()];
+                $field = $manager->fields[$fk->from_field];
+
+                if(!isset($this->foreign_keys[$klass])) {
+                    $this->foreign_keys[$klass] = $fk->field;
+                    $this->filters[] = Q($field,'=',$to_field);
                 }
-                else
-				    throw new QuerySetException("Unknown foreign key map $other");
-			}
-			else {
-                return $other_manager->fields[$other];
+
+                if(!isset($other_manager->fields[$other])){
+                    if($rest){
+                        return $this->_resolve_field($other.'__'.$rest,$other_manager);
+                    }
+                    else
+                        throw new QuerySetException("Unknown foreign key map $other");
+                }
+                else {
+                    return $other_manager->fields[$other];
+                }
             }
+            else if(isset($manager->fields[$field])) {
+                $field_obj = $manager->fields[$field];
+                if($field_obj instanceof DateTimeField) {
+                    if($other == 'date') {
+                        $copy = clone $field_obj;
+                        $copy->sub_part = 'date';
+                        return $copy;
+                    }
+                }
+            }
+
+            throw new QuerySetException("Unknown field $field");
+
 		}
     }
-    
+
     function order_by(){
 		$fields = func_get_args();
-		
+
 		foreach($fields as $field){
 			$order = 'ASC';
 			if(substr($field,0,1) === "-"){
 				$order = 'DESC';
 				$field = substr($field,1);
 			}
-			
+
 			$field = $this->_resolve_field($field);
 			$this->order_by[] = array($field,$order);
 		}
-		
+
         return $this;
     }
 
@@ -192,28 +323,6 @@ class QuerySet implements ArrayAccess, Iterator, Countable  {
 			$this->group_by[] = $field;
 		}
 
-        return $this;
-    }
-    
-    function limit($start,$count=NULL) {
-        if($count){
-            $count = intval($count);
-        }
-        $start = intval($start);
-        
-        if($start || $count) {
-            if($count){
-                $this->limit = array($start,$count);
-                $this->_qMinCount = $start+$count;
-            }
-            else {
-                $this->limit = array(0,$start);
-                $this->_qMinCount = $start;
-            }
-        }
-        else {
-            throw new Exception("Limits are not valid");
-        }
         return $this;
     }
 	
@@ -243,7 +352,7 @@ class QuerySet implements ArrayAccess, Iterator, Countable  {
 	}
     
     function delete(){
-        $this->operation = 'DELETE';
+        parent::delete();
         //Warning delete
 		$connection = $this->get_connection();
         $result = $connection->query($this,FALSE);
@@ -346,76 +455,8 @@ class QuerySet implements ArrayAccess, Iterator, Countable  {
     function __toString(){
         return $this->render();
     }
-    
-    function copy(){
-        return clone $this;
-    }
-    
-    
-    function setMinCount($count){
-        if($this->_qMinCount === NULL){
-            $this->_qMinCount = $count;
-        }
-        
-        if($count < $this->_qMinCount){
-            $this->_qMinCount = $count;
-        }
-    }
-    /*Implementation of interfaces*/
-    public function offsetSet($offset,$value) {
-        throw new Exception("Cannot set to QuerySet");
-    }
 
-    public function offsetExists($offset) {
-        $obj = $this->offsetGet($offset);
-        return $obj !== NULL;
-    }
-
-    public function offsetUnset($offset) {
-        throw new Exception("Cannot unset in QuerySet");
-    }
-
-    public function offsetGet($offset) {
-        
-        if($this->_qMinCount !== NULL && $offset >= $this->_qMinCount)
-            return NULL;
-        
-        if(isset($this->_qCache[$offset])){
-            return $this->_qCache[$offset];
-        }
-        
-        $this->load($offset);
-        if(isset($this->_qCache[$offset])){
-            return $this->_qCache[$offset];
-        }
-        
-        $this->setMinCount($offset);
-        return NULL;
-    }
-
-    public function rewind() {
-        $this->_qPtr = 0;
-    }
-
-    public function current() {
-        if(isset($this->_qCache[$this->_qPtr])){
-            return $this->_qCache[$this->_qPtr];
-        }
-    }
-
-    public function key() {
-        return $this->_qPtr;
-    }
-
-    public function next() {
-        $this->_qPtr++;
-        return $this->offsetGet($this->_qPtr);
-    }
-
-    public function valid() {
-        return ($this->offsetGet($this->_qPtr) !== NULL);
-    }   
-
+    /* countable */
     function count($field=NULL){
         $qs = clone $this;
         if(!$field)$field = $this->manager->pk;
@@ -423,42 +464,28 @@ class QuerySet implements ArrayAccess, Iterator, Countable  {
         $qs->limit = '';
         $qs->order_by = array();
         $qs->operation = 'COUNT';
-        
+
 		$row = $qs->evaluate();
         return $row->count;
     }
     
     /*over*/
-    
-    function load($start=0,$limit=100){
-        if(empty($this->limit)){
-            $this->limit($start,$limit);
-        }
-        else {
-            list($oldstart,$oldlimit) = $this->limit;
-            #echo "=============> ". $oldstart." ".$oldlimit." ".$start." ".$limit;
-            if($oldstart+$oldlimit <= $start){
-                return NULL;
-            }
-        }
-        
-        $i=$start;
-        
+
+    function fill_cache($i) {
+
         $connection = $this->get_connection();
-		$result = $connection->query($this,TRUE); // Use and throw
-		
+        $result = $connection->query($this,TRUE); // Use and throw
+
+
         while($row = $connection->fetch($result)){
             $this->_qCache[$i] = $this->_castable?$this->cast($row):$row;
             $i++;
         }
-		
-		$connection->free($result);
-		
-        if($i < ($this->limit[0] + $this->limit[1]))
-            $this->setMinCount($i);
-        
-        return $this->_qCache;
+
+        $connection->free($result);
+        return $i;
     }
+
     
     function get_connection(){
         $connections = import("djphp.db.Connection");

@@ -4,20 +4,16 @@ import('Url');
 
 class UrlResolver {
 	public static $urls;
+
+    private function _init_urls(){
+    	if(!self::$urls) {
+			self::$urls = import(App::$settings->ROOT_URLS);
+		}
+    }
 	
 	public static function resolve($path){
-		if(!self::$urls) {
-			/* //Disabling APC caching for root url array
-			 *
-			 * $urls = ApcCache::get('ROOT_URLS');
-			if(!$urls || App::$settings->DEBUG) {
-				$urls = import(App::$settings->ROOT_URLS);
-				ApcCache::set('ROOT_URLS', $urls);
-			}*/
-		    $urls = import(App::$settings->ROOT_URLS);
-			self::$urls = $urls;
-		}
-		return self::_resolve(self::$urls,$path);
+		self::_init_urls();
+        return self::_resolve(self::$urls,$path);
 	}
 	
 	private static function _resolve($urls,$path,$prefix = NULL){
@@ -114,6 +110,7 @@ class UrlResolver {
 		if($routes === NULL) {
 			$routes = ApcCache::get('ROOT_URLS_REVERSE');
 			if(!$routes || App::$settings->DEBUG) {
+                self::_init_urls();
 				self::_construct_routes($routes,self::$urls);
 				ApcCache::set('ROOT_URLS_REVERSE', $routes);
 			}
@@ -122,7 +119,7 @@ class UrlResolver {
 		if(isset($routes[$name])){
 			$route = $routes[$name];
 			$regex = $route;
-			
+
 			if($args) {
 				if($args[0] instanceof Argument){ // means kwargs
 					self::_prg_res_cb_named(NULL,$args[0]);
@@ -132,7 +129,6 @@ class UrlResolver {
 					self::_prg_res_cb(NULL,$args);
 					$regex = preg_replace_callback("/\(.*?\)/",array(__CLASS__,'_prg_res_cb'),$regex);
 				}
-				
 			}
 			
 			$_cache[$key] = $regex;
@@ -156,9 +152,11 @@ class UrlResolver {
 	static function  _prg_res_cb_named($matches=NULL,$kwargs=NULL){
 		static $_kwargs = NULL;
 		if($kwargs) { $_kwargs = $kwargs;}
-		if($matches) {
-			return $_kwargs->get($matches[1]);
-		}
+        else {
+            if($matches) {
+			     return $_kwargs->get($matches[1]);
+		    }
+        }
 		return NULL;
 	}
 }

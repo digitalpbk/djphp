@@ -8,7 +8,8 @@ function render_to_response($file, $context = NULL, $mimetype = NULL, $status = 
 }
 
 function render_to_string($file,&$context,$dirs = NULL ) {
-    return Template::render_to_string($file, $context, $dirs);
+    $tmpl = new Template();
+    return $tmpl->render_to_string($file, $context, $dirs);
 }
 
 function render_to_json($object) {

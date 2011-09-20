@@ -20,7 +20,7 @@ class App {
 		$this->init_settings($settings_file);
 		
 		if(App::$settings->DEBUG){
-			error_reporting(E_ALL);
+			error_reporting(E_ALL ^ E_NOTICE);
 		}
 		else {
 			//error_reporting(0);
@@ -33,7 +33,6 @@ class App {
 		$settings = import($settings_file,"Settings");
 		settings_merge($settings, $default_settings);
 		App::$settings = $settings;
-		
 	}
 	
 	function setup_environ($settings_file){
@@ -45,9 +44,55 @@ class App {
 		set_include_path($paths);		
 	}
 
+    public function exec_command(){
+        global $argv;
+
+        $program = array_shift($argv);
+        $command = array_shift($argv);
+        array_unshift($argv, $program);
+
+        $list = array();
+        $done = FALSE;
+
+		foreach(App::$settings->INSTALLED_APPS as $app){
+
+			$parsers = import($app.".commands",NULL,TRUE);
+
+            if(is_array($parsers)) {
+                $list = array_merge($list,array_keys($parsers));
+
+                if(isset($parsers[$command])) {
+                    $parser = $parsers[$command];
+                    if($parser instanceof OptionParser){
+                        try{
+                            $parser->parse($argv);
+                        }
+                        catch(Exception $e) {
+                            $parser->addHead("Usage: manage.php $command [ options ]\n");
+                            die($parser->getUsage());
+                        }
+                    }
+                    $command($parser);
+                    $done = TRUE;
+                    break;
+                }
+            }
+            
+		}
+
+        if(!$done) {
+            echo "Command not found \n";
+            echo join("\n",$list);
+            die;
+        }
+    }
+
 	public function handle() {
 		ob_start();
-		$response = &$this->_handle();
+        import("djphp.core.Http");
+        $request = new HttpRequest();
+		$response = &$this->request_to_response($request);
+
 		if(App::$settings->DEBUG) {
 			$debug = ob_get_contents();
 		}
@@ -61,7 +106,9 @@ class App {
 				header("HTTP/1.1 " . $response->status);
 			}
 			
-			header("Content-Type: ". $response->mimetype);
+			foreach($response->headers as $key => $value) {
+                header("$key: $value");
+            }
 			
 			if(!empty($response->content)){
 				echo $response->content;
@@ -74,9 +121,10 @@ class App {
 		}
 	}
 	
-	private function _handle(){
+	public function request_to_response(HttpRequest $request){
+
 		try{
-			return $this->get_response();
+			return $this->get_response($request);
 		}
 		catch(HttpException $e) {
             
@@ -117,10 +165,7 @@ class App {
 		}
 	}
 	
-	function get_response(){
-		import("djphp.core.Http");
-		$request = new HttpRequest();
-		
+	function get_response(HttpRequest $request){
 		$signals = import("djphp.core.Signals");
 		$signals->connect('REQUEST_START',array(__CLASS__,'setup_signals'),__CLASS__);
 		$signals->fire('REQUEST_START',kwargs('request',$request),__CLASS__);

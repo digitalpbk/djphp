@@ -1,7 +1,6 @@
 <?php
 class TemplateNotFound extends Exception {}
 class Template {
-	public $instance;
 	private $blockContents;
 	private $blockStack;
 	public $extendsFile;
@@ -46,7 +45,7 @@ class Template {
                 unset($this->blockContents[$blockName]);
 		 	}
 		 	else {
-		 		ob_end_flush();	 
+		 		ob_end_flush();
 		 	}
 		}
 	}
@@ -72,11 +71,9 @@ class Template {
 		return join(PATH_SEPARATOR,$dirs);
 	}
 	
-	static function append_process_context(&$data) {
+	static function get_extra_context(&$data) {
 		$extra = array();
-		if(!is_array($data))
-			$data = array();
-		
+
 		foreach(App::$settings->CONTEXT_PROCESSORS as $modules){
 			
 			if(is_array($modules)) {
@@ -98,20 +95,25 @@ class Template {
 			}
 		}
 		
-		$data = array_merge($data, $extra);
+		return $extra;
 	}
 	
-	static function render_to_string($file,&$data,$dirs = NULL) {
+	function render_to_string($file,&$data,$dirs = NULL) {
+        if(!$data) $data = array();
+        
+        static $extra = NULL;
+        if(!$extra)
+	        $extra = self::get_extra_context($data);
 
-	    self::append_process_context($data);
-	    
+        $data = array_merge($data,$extra);
+
 	    if(!$dirs)
 		    $dirs = self::set_template_dirs();
 	    
 	    $old = set_include_path($dirs);
 		import("djphp.templates.FFX");
 		try{
-			$content = self::_render_to_string($file,$data);
+			$content = $this->_render_to_string($file,$data);
 		}
 		catch(Exception $e){
 			set_include_path($old);
@@ -121,21 +123,18 @@ class Template {
 	    return $content;
 	}
 	
-	static function _render_to_string($file,&$data){
-	    static $template = NULL;
-	    if($template === NULL) //
-		$template = new Template(); 
-	    
+	function _render_to_string($file,&$data){
+		$template = $this;
 	    $template->extendsFile = NULL;
 	    ob_start();
 	    extract($data);
 	    
 	    try {
-		$ret = include($file);
+		    $ret = include($file);
 	    }
 	    catch (Exception $e){
-		ob_end_clean();
-		throw $e;
+            ob_end_clean();
+            throw $e;
 	    }
 	    
 	    if($ret === FALSE) {
@@ -147,9 +146,9 @@ class Template {
             return self::_render_to_string($template->extendsFile,$data);
 	    }
 	    else {
-		$op = ob_get_contents();
-		ob_end_clean();
-		return $op;
+            $op = ob_get_contents();
+            ob_end_clean();
+            return $op;
 	    }
 	}
 }

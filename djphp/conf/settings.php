@@ -33,5 +33,5 @@ class DefaultSettings extends BaseSettings {
     public $CACHES = array();
 
     public $EMAIL_DEFAULT_FROM = array('Admin','root@localhost');
-
+    public $PROXY_IP_LIST = FALSE;
 }

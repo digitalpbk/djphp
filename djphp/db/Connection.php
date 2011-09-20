@@ -14,8 +14,8 @@ class DB_Connection implements arrayaccess {
     public function offsetGet($db) {
         if(!$db) $db = 'default';
         
-        if(isset($connections[$db])) {
-            return $connections[$db];
+        if(isset(self::$connections[$db])) {
+            return self::$connections[$db];
         }
         
         $config = App::$settings->DATABASES[$db];
@@ -25,8 +25,8 @@ class DB_Connection implements arrayaccess {
         import($config['driver']);
         $class = array_pop(explode('.',$config['driver'])) . 'Backend';
         
-        $connections[$db] = new $class($config);
-        return $connections[$db];
+        self::$connections[$db] = new $class($config);
+        return self::$connections[$db];
     }
     
     function offsetSet($db,$value){
@@ -34,7 +34,7 @@ class DB_Connection implements arrayaccess {
     }
     
     function offsetExists($db){
-        return isset($connections[$db]);
+        return isset(self::$connections[$db]);
     }
     
     function offsetUnset($db){}

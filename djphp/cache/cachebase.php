@@ -28,12 +28,12 @@ class BaseCache {
         if(is_array($value) || is_numeric($value)){
             return $value;
         }
-        
-        $object = unserialize($value);
+
+        $object = @unserialize($value);
         if($object instanceof SlO){
             return $object->value;
         }
-        return $object;
+        return $value;
     }
 
     static function generate_key() {

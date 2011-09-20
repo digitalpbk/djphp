@@ -12,6 +12,7 @@ class Pagination {
 	public $next_page;
 	private $qs;
 	public $empty = FALSE;
+    public $var = 'page';
 	
 	//constructor
 	function __construct($qs,$rowsPerPage=10){
@@ -62,8 +63,9 @@ class Pagination {
 			elseif($current_page > $this->num_pages) {
 				throw new EmptyPage();
 			}
-			
-			$this->qs->limit(($current_page - 1) * $this->rowsPerPage,$this->rowsPerPage);
+
+            $this->qs->limit(($current_page - 1) * $this->rowsPerPage,$this->rowsPerPage);
+
 			$this->prev_page  = $this->current_page-1;
 			$this->next_page  = $this->current_page+1;
 		}
@@ -119,6 +121,61 @@ class Pagination {
 		return $this->_totalRows;
 	}
 	
+	public function url($current_uri, $page) {
+        if(strpos($current_uri,$this->var . '=') !== FALSE) {
+            $current_uri = preg_replace('|[\&\?]'. $this->var . '=\d+|','',$current_uri, 1);
+        }
+        
+        if(strpos($current_uri,'?') === FALSE) {
+            return '?' . $this->var . '=' . $page;
+        }
+        else {
+            return $current_uri . '&' . $this->var . '=' . $page;
+        }
+    }
 	
-	
+}
+
+class ProxyPagination implements Countable, Iterator {
+    private $array;
+    private $_ptr;
+    private $count;
+    //constructor
+	function __construct($array, $count = NULL){
+        $this->array = $array;
+        $this->_ptr = 0;
+        $this->count = $count;
+	}
+
+    public function count() {
+        return isset($this->count)?$this->count:count($this->array);
+    }
+
+    public function copy(){
+        return $this;
+    }
+
+    public function limit($start,$end) {
+        // pass;
+    }
+
+    public function key() {
+        return $this->_ptr;
+    }
+
+    public function rewind() {
+        $this->_ptr = 0;
+    }
+
+    public function next() {
+        $this->_ptr++;
+    }
+
+    public function current(){
+        return $this->array[$this->_ptr];
+    }
+
+    public function valid() {
+        return isset($this->array[$this->_ptr]);
+    }
 }

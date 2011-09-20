@@ -14,9 +14,11 @@ class Auth {
 		foreach($backends as $backend){
 			list($module, $class) = module_dot_class($backend);
 			import($module);
-			$user = call_user_func(array($class,'get_user'), $request, $args);
-			if($user !== NULL) {
-                break;
+            if(method_exists($class,'get_user')) {
+                $user = call_user_func(array($class,'get_user'), $request, $args);
+                if($user !== NULL) {
+                    break;
+                }
             }
 		}
 		
@@ -52,6 +54,19 @@ class Auth {
     }
 
     static function look_up_permission($perm) {
+        self::get_all_permissions();
+        
+        if(isset(Auth::$permissions[$perm])){
+            return Auth::$permissions[$perm];
+        }
+
+        if(is_numeric($perm) && in_array($perm,array_values(Auth::$permissions)))
+            return $perm;
+
+        throw new Exception('Invalid Permission ' . $perm);
+    }
+
+    static function get_all_permissions() {
         if(!isset(Auth::$permissions)) {
             $perms = array();
             foreach(App::$settings->INSTALLED_APPS as $app){
@@ -66,11 +81,7 @@ class Auth {
             Auth::$permissions = array_flip($perms);
         }
 
-        if(isset(Auth::$permissions[$perm])){
-            return Auth::$permissions[$perm];
-        }
-
-        throw new Exception('Invalid Permission ' . $perm);
+        return Auth::$permissions;
     }
 
     static function has_access($user, $perm) {
@@ -109,4 +120,32 @@ class Auth {
 		}
 		return FALSE;
 	}
+
+    static function grant_access($user, $perm) {
+        $perm_code = Auth::look_up_permission($perm);
+        $backends = App::$settings->AUTH_BACKENDS;
+		foreach($backends as $backend){
+			list($module, $class) = module_dot_class($backend);
+			import($module);
+            if(method_exists($class,'grant_access') && call_user_func(array($class,'grant_access'), $user, $perm, $perm_code))
+                return true;
+
+		}
+
+        return FALSE;
+    }
+
+    static function revoke_access($user, $perm) {
+        $perm_code = Auth::look_up_permission($perm);
+        $backends = App::$settings->AUTH_BACKENDS;
+		foreach($backends as $backend){
+			list($module, $class) = module_dot_class($backend);
+			import($module);
+            if(method_exists($class,'revoke_access') && call_user_func(array($class,'revoke_access'), $user, $perm, $perm_code))
+                return true;
+
+		}
+
+        return FALSE;
+    }
 }

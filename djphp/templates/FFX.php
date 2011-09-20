@@ -80,4 +80,40 @@ class FFX {
             ? 'th' : 'st' : 'nd' : 'rd' : 'th'));
         return $num.$ext;
     }
+
+    static function arrayize($var,$limit = NULL) {
+        if(!is_array($var))
+            $var = array($var);
+
+        if($limit) {
+            return array_slice($var,0,$limit);
+        }
+        return $var;
+    }
+
+    static function append_qsa($url, $args) {
+        if(is_array($args))
+            $qsa = http_build_query($args);
+        else
+            $qsa = $args;
+        
+        if(strpos($url,"#") === FALSE) {
+            if(strpos($url,"?") === FALSE)
+                $url .= '?'.$qsa;
+            else
+                $url .= '&'.$qsa;
+        }
+        else {
+            if(strpos($url,"?") === FALSE)
+                $url = str_replace('#','?'.$qsa.'#',$url);
+            else
+                $url = str_replace('#','&'.$qsa.'#',$url);
+        }
+
+        return $url;
+    }
+
+    static function remove_lines($lines) {
+        return str_replace("\n",' ',$lines);
+    }
 }

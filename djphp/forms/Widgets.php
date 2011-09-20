@@ -20,14 +20,10 @@ abstract class Widget {
     
     function renderAttributes(){
         $arr = array();
-        
-		if(!isset($this->attrs['name'])) {
-			$this->attrs['name'] = isset($this->prefix) ? $this->prefix . '_' . $this->formfield->field : $this->formfield->field ;
-		}
-		
+
+        $name = $this->get_name();
 		if(!isset($this->attrs['id'])) {
-			//$this->attrs['id'] = 'id_' . $this->attrs['name'];
-			$this->attrs['id'] = isset($this->prefix) ? $this->prefix . '_id_' . $this->formfield->field : 'id_' . $this->formfield->field;
+			$this->attrs['id'] = 'id_' . $name;
 		}
 
         if($this->formfield->required) {
@@ -41,9 +37,17 @@ abstract class Widget {
         return join(' ',$arr);
     }
 
+    function get_name() {
+		if(!isset($this->attrs['name'])) {
+			$this->attrs['name'] = isset($this->prefix) ? $this->prefix . '_' . $this->formfield->field : $this->formfield->field ;
+		}
+
+        return $this->attrs['name'];
+    }
+
     function get_label_target(){
         if(!isset($this->attrs['id'])) {
-			$this->attrs['id'] = 'id_' . $this->attrs['name'];
+			$this->attrs['id'] = 'id_' . $this->get_name();
 		}
         return $this->attrs['id'];
     }
@@ -128,4 +132,28 @@ class SelectWidget extends Widget {
 
 }
 
+class MultiSelectWidget extends Widget {
+	public $choices;
 
+    function renderOptions($value){
+        $str = '';
+
+        foreach($this->choices as $k => $val){
+            $selected = '';
+            if(is_array($value) && in_array($k,$value)){
+                $selected = 'selected ';
+            }
+            $str .= '<option '.$selected.'value="'.$k.'">'.$val.'</option>';
+        }
+
+        return $str;
+    }
+
+    function render($value){
+    	return '<select multiple="multiple" '.$this->renderAttributes().'>'.$this->renderOptions($value).'</select>';
+    }
+
+    function get_name() {
+        return $this->attrs['name'] = parent::get_name().'[]';
+    }
+}

@@ -1,4 +1,7 @@
 <?php
+import('djphp.models.BaseModel');
+import('djphp.models.BaseManager');
+import('djphp.models.Fields');
 
 define('ANSWER_LOG_CRITICAL',4);
 define('ANSWER_LOG_ERROR',3);
@@ -15,6 +18,7 @@ class DBExceptionLog extends BaseModel {
 	public $file;
 	public $client;
 	public $severity;
+    public $uniq_key;
 
 	public static $objects;
 	public static $fields;
@@ -34,8 +38,18 @@ class DBExceptionLog extends BaseModel {
 	public function __toString() {
 		return $this->message;
 	}
+
+    public static function set_uniq_key($sender,$kwargs) {
+        if($kwargs->created) {
+            $object = $kwargs->object;
+            $object->uniq_key = md5(App::$settings->SECRET_KEY.$object->backtrace.$object->message);
+        }
+    }
 }
 
 DBExceptionLog::init();
+
+$signals = import("djphp.core.Signals");
+$signals->connect('PRESAVE',array('DBExceptionLog','set_uniq_key'),'DBExceptionLog','set_uniq_key');
 
 // vim: tabstop=4 softtabstop=4 shiftwidth=4 noexpandtab ai

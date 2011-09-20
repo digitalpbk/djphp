@@ -36,3 +36,17 @@ function require_permission(HttpRequest $request, $perm) {
         }
     }
 }
+
+function require_admin(HttpRequest $request) {
+    require_login($request);
+    if(!$request->user->is_admin) {
+        throw new DecoratorException(HttpResponse("Access Denied",403));
+    }
+}
+
+function require_staff(HttpRequest $request) {
+    require_login($request);
+    if(!$request->user->is_staff) {
+        throw new DecoratorException(HttpResponse("Access Denied",403));
+    }
+}

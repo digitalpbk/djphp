@@ -10,11 +10,11 @@ class ErrorController {
 		}
 
         try{
-            $context["e"] = $e;
-            return render_to_response('403.phtml',RequestContext($request,$context));
+            $context['e'] = $e;
+            return render_to_response('403.phtml',RequestContext($request,$context),NULL,403);
         }
         catch(Exception $e) {
-            return new HttpResponse("403",403);
+            return new HttpResponse('403',403);
         }
     }
     
@@ -26,10 +26,10 @@ class ErrorController {
 
         try{
             $context["e"] = $e;
-            return render_to_response('404.phtml',RequestContext($request,$context));
+            return render_to_response('404.phtml',RequestContext($request,$context),NULL,404);
         }
         catch(Exception $e) {
-            return new HttpResponse("404",404);
+            return new HttpResponse('404',404);
         }
     }
     
@@ -40,18 +40,43 @@ class ErrorController {
         }
         else {
             try{
-                $context["e"] = $e;
-                import("models");
+                $context['e'] = $e;
+                import('models');
                 $log = new DBExceptionLog();
                 $log->backtrace = $e->getTraceAsString();
                 $log->message = $e->getMessage();
                 $log->file = $request->uri;
+                
+                DBExceptionLog::$objects->save($log,FALSE,TRUE); //TRUE for delayed insert
 
-                DBExceptionLog::$objects->save($log,FALSE,TRUE);
-                return render_to_response('500.phtml',RequestContext($request,$context));
+                import('djphp.mail.base');
+                $subject = '['.App::$settings->SITE_NAME.'] Error '.$log->message;
+                $date = new DateTime();
+                $date = $date->format("c");
+
+                $user = NULL;
+                try{
+                    if($request->user->is_authenticated()) {
+                        $user = sprintf("%d %s %s",$request->user->id,$request->user->username,$request->user->name);
+                    }
+                }
+                catch(Exception $e) {}
+                
+                $message = <<<MESSAGE
+Error: $log->message
+Date: $date
+Requested URI: $log->file
+User: $user
+
+Backtrace:
+$log->backtrace
+MESSAGE;
+
+                Mail::admins($subject,$message);
+                return render_to_response('500.phtml',RequestContext($request,$context),NULL,500);
             }
             catch(Exception $e) {
-                return new HttpResponse("Internal Server Error",500);
+                return new HttpResponse('Internal Server Error',500);
             }
         }
     }

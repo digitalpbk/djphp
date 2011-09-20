@@ -1,0 +1,15 @@
+<? echo '<?xml version="1.0" encoding="UTF-8"?>'?>
+
+<urlset
+  xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xsi:schemaLocation="http://www.sitemaps.org/schemas/sitemap/0.9
+                      http://www.sitemaps.org/schemas/sitemap/0.9/sitemap.xsd">
+ <? foreach($objects as $o):?>
+ <url>
+  <loc>http://<?=$SITE_NAME?><?=$sitemap->url($o);?></loc>
+  <lastmod><?=$sitemap->lastmod($o)->format('c');?></lastmod>
+  <priority>0.5000</priority>
+ </url>
+ <? endforeach; ?>
+</urlset>

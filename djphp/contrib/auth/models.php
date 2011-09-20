@@ -62,7 +62,22 @@ class User extends BaseModel {
         $this->password = $password;
     }
 	
+    public function check_access($name){
+        import('djphp.contrib.auth.base');
+        return Auth::has_access($this, $name);
+    }
 
+    public function grant_access($name) {
+        return Auth::grant_access($this,$name);
+    }
+
+    public function revoke_access($name) {
+        return Auth::revoke_access($this,$name);
+    }
+
+    public function all_access(){
+        return $this->userpermissionmap_set;
+    }
 }
 
 class AnonymousUser {
@@ -106,8 +121,19 @@ class AuthenticatedUser extends AnonymousUser{
     }
 
     public function check_access($name){
-        import('djphp.contrib.auth.base');
-        return Auth::has_access($this->user, $name);
+        return $this->user->check_access($name);
+    }
+
+    public function grant_access($name) {
+        return $this->user->grant_access($name);
+    }
+
+    public function revoke_access($name) {
+        return $this->user->revoke_access($name);
+    }
+
+    public function all_access(){
+        return $this->user->all_access();
     }
 
     /**

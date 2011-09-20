@@ -52,7 +52,12 @@ class BaseManager  {
 			}
 		}
 		
-		$this->table = getStaticProperty($reflection, "table");
+		$table_prefix = getStaticProperty($reflection, "table_prefix");
+		if(!isset($table_prefix)) {
+			$table_prefix = empty(App::$settings->TABLE_PREFIX) ? '' : App::$settings->TABLE_PREFIX;
+		}
+		
+		$this->table = $table_prefix . getStaticProperty($reflection, "table");
 	}
     
 	public function get($id,$field = NULL)
@@ -72,6 +77,15 @@ class BaseManager  {
 		
 		return $obj[0];
 	}
+
+    /**
+     * Saves an object to a row in dB
+     * @throws Exception
+     * @param $obj
+     * @param bool $force_insert
+     * @param bool $delayed
+     * @return 
+     */
     
 	public function save(&$obj,$force_insert=False,$delayed = FALSE)
     {
@@ -93,7 +107,7 @@ class BaseManager  {
 			foreach($this->fields as $field => $defn){
 				$value = $obj->{$field};
 
-				if($defn->default && $value === NULL){
+				if(isset($defn->default) && $value === NULL){
 					$obj->{$field} = $value = $defn->get_default();
 				}
 
@@ -121,12 +135,13 @@ class BaseManager  {
 			
 			$values = array();
 			foreach($this->fields as $field => $defn){
-				if($obj->{$field} !== $obj->__initial->{$field}){
-					$values[$field] = $defn->before_save($obj->{$field}, $obj,FALSE);
-					if($defn->null === FALSE && $values[$field] === NULL){
+                $value = $defn->before_save($obj->{$field},$obj,FALSE);
+				if($value !== $obj->__initial->{$field}){
+					if($defn->null === FALSE && $value === NULL){
 						throw new Exception($field . ' cannot be null');
 					}
 				}
+                $values[$field] = $value;
 			}
 
 
@@ -148,8 +163,14 @@ class BaseManager  {
 	function delete($obj,$field = NULL) {
 		if(!$field)
 			$field = $this->pk;
+        
 		$qs = $this->_qs();
-		return $qs->filter(Q($field,'=',$obj->{$field}))->limit(1)->delete();
+		$ret = $qs->filter(Q($field,'=',$obj->{$field}))->limit(1)->delete();
+
+        $signals = import("djphp.core.Signals");
+        $signals->fire('DELETE',kwargs('object',$obj),$this->klass);
+
+        return $ret;
 	}
 	
     public function filter(){

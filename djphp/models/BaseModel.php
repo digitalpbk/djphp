@@ -21,44 +21,45 @@ class BaseModel {
 				$defn = $fields[$name];
                 
                 if($defn instanceof ForeignKeyField){
-					$this->__caches[$name] = $defn->to_php($this->{$defn->from_field}, $this);
+					return $this->__caches[$name] = $defn->to_php($this->{$defn->from_field}, $this);
 				}
 
 			}
-			else {
-				// can be a reverse thing
-				if(class_exists($name)){
-					$manager = getStaticProperty(get_class($this),"objects");
-					$other_manager = getStaticProperty($name,"objects");
-					$fields = $other_manager->foreign_keys;
-					foreach($fields as $fk){
-						if($fk instanceof OneToOneField){
-							if($fk->to_klass == get_class($this)){
-								//var_dump($other_manager,$this->{$manager->pk},$fk->from_field);
-								$this->__caches[$name] =  $other_manager->get($this->{$manager->pk},$fk->from_field);
-								break;
-							}
-						}
-					}
-				}
 
-                if(strpos($name,"_set") !== FALSE) {
-                    $name = substr($name,0,-4);
-                    if(class_exists($name)){
-					    $other_manager = getStaticProperty($name,"objects");
-                        $fields = $other_manager->foreign_keys;
-                        
-                        foreach($fields as $fk){
-                            if($fk instanceof ForeignKeyField){
-                                if($fk->to_klass == get_class($this)){
-                                    $this->__caches[$name] =  $other_manager->filter($fk->field,'=',$this);
-                                    break;
-                                }
+            // can be a reverse thing
+            if(class_exists($name)){
+                $manager = getStaticProperty(get_class($this),"objects");
+                $other_manager = getStaticProperty($name,"objects");
+                $fields = $other_manager->foreign_keys;
+                foreach($fields as $fk){
+                    if($fk instanceof OneToOneField){
+                        if($fk->to_klass == get_class($this)){
+                            //var_dump($other_manager,$this->{$manager->pk},$fk->from_field);
+                            return $this->__caches[$name] =  $other_manager->get($this->{$manager->pk},$fk->from_field);
+                        }
+                    }
+                }
+            }
+
+            if(strpos($name,"_set") !== FALSE) {
+                $name = substr($name,0,-4);
+                if(class_exists($name)){
+                    $other_manager = getStaticProperty($name,"objects");
+                    $fields = $other_manager->foreign_keys;
+
+                    foreach($fields as $fk){
+                        if($fk instanceof ForeignKeyField){
+                            if($fk->to_klass == get_class($this)){
+                                return $this->__caches[$name] =  $other_manager->filter($fk->field,'=',$this);
                             }
                         }
                     }
                 }
-			}
+            }
+
+            if(method_exists($this,$name)) {
+                return $this->$name();
+            }
 		}
 		return $this->__caches[$name];
 	}
